@@ -20,12 +20,40 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@RequestMapping("/files")  // Adiciona um prefixo para as rotas
 public class Controller {
 
     record FileResponse(UUID link) {}
 
     @Autowired
     FileRepository fileRepository;
+
+    // Método POST para upload de arquivo
+    @PostMapping("/upload")
+    public ResponseEntity<FileResponse> uploadFile(@RequestParam("file") MultipartFile file) {
+        try {
+            // Criação de um UUID para o arquivo
+            UUID fileId = UUID.randomUUID();
+
+            // Define o caminho onde o arquivo será salvo
+            Path targetLocation = Paths.get("src/main/resources/static/files/" + fileId.toString() + "-" + file.getOriginalFilename());
+
+            // Salva o arquivo no diretório especificado
+            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+            // Criação de um registro no banco de dados
+            FileStorage fileStorage = new FileStorage();
+            fileStorage.setId(fileId);
+            fileStorage.setPath(file.getOriginalFilename());
+
+            fileRepository.save(fileStorage);
+
+            // Retorna a resposta com o ID do arquivo
+            return ResponseEntity.ok(new FileResponse(fileId));
+        } catch (IOException e) {
+            throw new RuntimeException("Erro ao fazer upload do arquivo: " + e.getMessage());
+        }
+    }
 
     @GetMapping("/download/{id}")
     public ResponseEntity<Resource> downloadFile(@PathVariable UUID id) throws MalformedURLException {
@@ -49,10 +77,8 @@ public class Controller {
                 .body(resource);
     }
 
-
-    @GetMapping("file")
+    @GetMapping("/list")
     public List<FileStorage> listFiles() {
         return fileRepository.findAll();
     }
-
 }
